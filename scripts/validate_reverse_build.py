@@ -11,17 +11,24 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+import importlib.util
 import sys
 
-sys.path.insert(0, str(ROOT / "pythonlib"))
+# reverse_compat.py 是纯常量契约文件（零依赖），按文件路径直接加载，
+# 避免经 camoufox/__init__.py 拖入 orjson 等运行时依赖——CI smoke job
+# 在 pip install 之前就要跑本脚本（2026-09-26 GHA 首跑实测教训）。
+_spec = importlib.util.spec_from_file_location(
+    "reverse_compat", ROOT / "pythonlib" / "camoufox" / "reverse_compat.py")
+assert _spec is not None and _spec.loader is not None
+_reverse_compat = importlib.util.module_from_spec(_spec)
+sys.modules.setdefault("reverse_compat", _reverse_compat)
+_spec.loader.exec_module(_reverse_compat)
 
-from camoufox.reverse_compat import (  # noqa: E402
-    BROWSER_SELECTOR,
-    REVERSE_RELEASE,
-    UPSTREAM_RELEASE,
-    UPSTREAM_VERSION,
-    capability_contract,
-)
+BROWSER_SELECTOR = _reverse_compat.BROWSER_SELECTOR
+REVERSE_RELEASE = _reverse_compat.REVERSE_RELEASE
+UPSTREAM_RELEASE = _reverse_compat.UPSTREAM_RELEASE
+UPSTREAM_VERSION = _reverse_compat.UPSTREAM_VERSION
+capability_contract = _reverse_compat.capability_contract
 
 
 def _read_upstream_assignments() -> dict[str, str]:
