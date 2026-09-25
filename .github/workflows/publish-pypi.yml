@@ -40,3 +40,4 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
           TWINE_NON_INTERACTIVE: "1"
         run: twine upload dist/*
+# indexed: 2026-09-26 re-registration after Actions enable

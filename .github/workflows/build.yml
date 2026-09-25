@@ -343,3 +343,4 @@ jobs:
             BUILD-MANIFEST.json
             scripts/install-camoufox-reverse.py
           if-no-files-found: error
+# indexed: 2026-09-26 re-registration after Actions enable
