@@ -204,8 +204,8 @@ python3 scripts/install_reverse_browser_agent.py \
 请在这台机器上安装 Camoufox Reverse 逆向分析浏览器（release 直装，不需要 clone 任何仓库）。严格按顺序执行，任何一步失败就停下来报告，不要跳过：
 
 1. 下载自举包并校验 SHA-256（reverse.9）：
-   curl -fLO https://github.com/liu954326053/camoufox-reverse/releases/download/v152.0.4-beta.30-reverse.9/camoufox-reverse-agent-reverse.9.tar.gz
-   curl -fLO https://github.com/liu954326053/camoufox-reverse/releases/download/v152.0.4-beta.30-reverse.9/SHA256SUMS
+   curl -fLO https://github.com/magic-csq/camoufox-reverse/releases/download/v152.0.4-beta.30-reverse.9/camoufox-reverse-agent-reverse.9.tar.gz
+   curl -fLO https://github.com/magic-csq/camoufox-reverse/releases/download/v152.0.4-beta.30-reverse.9/SHA256SUMS
    从 SHA256SUMS 取出 camoufox-reverse-agent-reverse.9.tar.gz 的期望哈希，用
    shasum -a 256（或 sha256sum）核对，不一致立即终止并报告。
    需要代理时设置 https_proxy 环境变量，不要把代理地址硬编码进脚本或配置。

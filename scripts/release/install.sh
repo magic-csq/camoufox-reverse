@@ -24,7 +24,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RELEASE_BASE="${CAMOUFOX_REVERSE_RELEASE_BASE:-https://github.com/liu954326053/camoufox-reverse/releases/download/v152.0.4-beta.30-reverse.9}"
+RELEASE_BASE="${CAMOUFOX_REVERSE_RELEASE_BASE:-https://github.com/magic-csq/camoufox-reverse/releases/download/v152.0.4-beta.30-reverse.9}"
 PROJECT_DIR="${1:-${CAMOUFOX_REVERSE_PROJECT_DIR:-$HOME/camoufox-reverse-evidence}}"
 MCP_PROXY="${CAMOUFOX_REVERSE_PROXY:-http://127.0.0.1:7890}"
 BROWSER_FOLDER="152.0.4-beta.30-reverse.9"

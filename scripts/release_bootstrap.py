@@ -14,7 +14,7 @@ import re
 import sys
 
 RELEASE_TAG = "v152.0.4-beta.30-reverse.9"
-RELEASE_REPO = "liu954326053/camoufox-reverse"
+RELEASE_REPO = "magic-csq/camoufox-reverse"
 RELEASE_BASE = (
     f"https://github.com/{RELEASE_REPO}/releases/download/{RELEASE_TAG}"
 )

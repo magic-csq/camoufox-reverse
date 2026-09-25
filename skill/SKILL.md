@@ -1,7 +1,8 @@
----
+***
+
 name: camoufox-reverse-browser
 description: 使用 Camoufox Reverse 的 CLI 和 MCP 进行授权 Web 逆向取证、原始证据管理和执行链分析。
----
+------------------------------------------------------------------------
 
 # Camoufox Reverse 浏览器
 
@@ -60,19 +61,15 @@ bash mcp/run-client.sh \
 
 ## 取证纪律
 
-- 先列出 2 到 5 个高信息量入口，再启用定向 trace；不要无目标地记录整个 JS 引擎。
-- 将请求 ID、脚本 hash、源码位置、调用帧和 trace 序号关联起来；仅凭时间相近不能断言数据依赖。
-- `observed` 只用于直接捕获的输入/输出，`call-linked` 只用于调用关系，`inferred` 必须注明推断，缺失链路标为 `gap`。
-- raw 只追加；分析结果写到 `derived/`、`report/` 或 `indexes/`，不能覆盖 raw。
-- 所有 stdout/stderr 不得出现密码、Cookie、token 或完整代理认证信息。
+* 先列出 2 到 5 个高信息量入口，再启用定向 trace；不要无目标地记录整个 JS 引擎。
 
-## 禁止事项
+* 将请求 ID、脚本 hash、源码位置、调用帧和 trace 序号关联起来；仅凭时间相近不能断言数据依赖。
 
-- 不自动填写第三方账号或保存聊天中提供的账号密码。
-- 不绕过验证码、登录挑战、BotGuard 或其它风控防护。
-- 不把浏览器 profile、旧 Cookie 或旧 session 当作默认输入。
-- 不使用 Node、JavaScript 客户端或临时目录代替工程目录；MCP client 使用 Python 标准库。
-- 不上传证据、不遥测、不自动提交 Git。
+* `observed` 只用于直接捕获的输入/输出，`call-linked` 只用于调用关系，`inferred` 必须注明推断，缺失链路标为 `gap`。
+
+* raw 只追加；分析结果写到 `derived/`、`report/` 或 `indexes/`，不能覆盖 raw。
+
+* 所有 stdout/stderr 不得出现密码、Cookie、token 或完整代理认证信息。
 
 ## 收尾验收
 
