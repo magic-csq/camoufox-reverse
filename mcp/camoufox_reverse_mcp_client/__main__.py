@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import stat
 import sys
 from pathlib import Path
 from typing import Any
@@ -32,6 +33,17 @@ def _parser() -> argparse.ArgumentParser:
     call = subparsers.add_parser("call", help="Call one MCP tool")
     call.add_argument("name")
     call.add_argument("--arguments", default="{}", help="JSON object passed as tool arguments")
+    batch = subparsers.add_parser(
+        "batch",
+        help="Run a sequence of tool calls within ONE server session "
+        "(JSON-lines file or '-' for stdin; keeps the browser alive across calls)",
+    )
+    batch.add_argument("file", help="JSON-lines file of {\"tool\": name, \"arguments\": {...}}, or '-' for stdin")
+    batch.add_argument(
+        "--stop-on-error",
+        action="store_true",
+        help="Abort the batch on the first failed call (default: report and continue)",
+    )
     return parser
 
 
@@ -72,6 +84,75 @@ def main(argv: list[str] | None = None) -> int:
             client.initialize()
             if namespace.action == "list-tools":
                 result: dict[str, Any] = client.list_tools()
+                print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+                return 0
+            if namespace.action == "batch":
+                exit_code = 0
+
+                def run_line(lineno: int, raw: str) -> tuple[dict[str, Any] | None, bool]:
+                    """Process one batch line; returns (entry, shutdown)."""
+                    line = raw.strip()
+                    if not line or line.startswith("#"):
+                        return None, False
+                    tool_name: str | None = None
+                    try:
+                        spec = json.loads(line)
+                        if not isinstance(spec, dict) or not isinstance(spec.get("tool"), str):
+                            raise ValueError("each batch line must be {\"tool\": name, \"arguments\": {...}}")
+                        tool_name = spec["tool"]
+                        if tool_name == "__shutdown__":
+                            return {"tool": tool_name, "ok": True, "result": {"status": "shutdown"}}, True
+                        arguments = spec.get("arguments", {})
+                        if not isinstance(arguments, dict):
+                            raise ValueError("batch line arguments must be a JSON object")
+                        result = client.call_tool(tool_name, arguments)
+                        return {"tool": tool_name, "ok": True, "result": result}, False
+                    except MCPError:
+                        return {
+                            "tool": tool_name,
+                            "ok": False,
+                            "error": "MCP request failed; details omitted to protect sensitive values.",
+                        }, False
+                    except (json.JSONDecodeError, ValueError) as error:
+                        return {"tool": None, "ok": False, "error": f"line {lineno}: {error}"}, False
+
+                def emit(entry: dict[str, Any]) -> bool:
+                    nonlocal exit_code
+                    print(json.dumps(entry, ensure_ascii=False), flush=True)
+                    if not entry["ok"]:
+                        exit_code = 1
+                        return namespace.stop_on_error
+                    return False
+
+                is_fifo = False
+                if namespace.file != "-":
+                    try:
+                        is_fifo = stat.S_ISFIFO(os.stat(namespace.file).st_mode)
+                    except OSError:
+                        is_fifo = False
+                if is_fifo:
+                    # Long-session mode: reopen the FIFO after each writer's EOF so
+                    # one server process (and its browser) serves many one-shot
+                    # `echo '{"tool": ...}' > fifo` commands. Terminates on
+                    # {"tool": "__shutdown__"}.
+                    while True:
+                        with open(namespace.file, encoding="utf-8") as lines:
+                            for lineno, raw in enumerate(lines, start=1):
+                                entry, shutdown = run_line(lineno, raw)
+                                if entry is None:
+                                    continue
+                                if emit(entry) or shutdown:
+                                    return exit_code
+                    # unreachable
+                source = sys.stdin if namespace.file == "-" else open(namespace.file, encoding="utf-8")
+                with source as lines:
+                    for lineno, raw in enumerate(lines, start=1):
+                        entry, shutdown = run_line(lineno, raw)
+                        if entry is None:
+                            continue
+                        if emit(entry) or shutdown:
+                            return exit_code
+                return exit_code
             else:
                 try:
                     arguments = json.loads(namespace.arguments)

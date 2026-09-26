@@ -36,6 +36,47 @@ description: 用 Camoufox Reverse 逆向浏览器做授权 Web 逆向取证与�
 
 整条任务**只用同一个浏览器实例/同一套指纹配置**——换实例 = 指纹变化 = 可能触发风控拿到假数据，污染整条证据链。
 
+## 宿主工具调用方式（动手前先确认，30 秒）
+
+不同 Agent 宿主暴露 MCP 工具的方式不同。开始任务前先用一次真实调用确认自己处在哪种环境，然后全程只用这种方式：
+
+1. **直接工具**（Kimi、Codex 等）：工具列表里直接有 `launch_browser`、`navigate` 等 36 个工具 → 直接调用。
+2. **元工具**（Grok 等延迟加载宿主）：工具列表里只有 `search_tool` / `use_tool` → 先 `search_tool` 搜工具名（如 `search_tool("launch_browser")`），再用**带服务器前缀的全名**调用：`use_tool("camoufox-reverse__launch_browser", {...})`。前缀是 `camoufox-reverse__`（两个下划线）。不知道参数schema 时，`search_tool` 的结果里会带。
+3. **命令行兜底**（宿主不支持 MCP 或工具调用持续失败）：用 `bash ~/camoufox-reverse-browser/mcp/run-client.sh --project-dir <绝对路径> --timeout 180 batch <calls>` 执行。两种形态：
+
+   **形态一：FIFO 长会话（多步任务的首选，浏览器全程存活）**。每次 `call`/一次性 batch 结束后 server 进程退出、浏览器注册表（内存）即丢失；FIFO 模式让一个 server 进程常驻，跨多条终端命令复用同一个浏览器 session：
+
+   ```bash
+   EVD=/abs/evidence   # 证据目录（绝对路径）
+   mkfifo "$EVD/mcp.fifo"
+   bash ~/camoufox-reverse-browser/mcp/run-client.sh --project-dir "$EVD" --timeout 180 \
+     batch "$EVD/mcp.fifo" > "$EVD/mcp-results.jsonl" 2>&1 &
+   # 之后每一步都是一次独立的终端命令，浏览器状态全程保持：
+   echo '{"tool": "launch_browser", "arguments": {"project_dir": "'"$EVD"'", "headless": true}}' > "$EVD/mcp.fifo"
+   sleep 15; tail -1 "$EVD/mcp-results.jsonl"   # 读这一步的真实返回
+   echo '{"tool": "navigate", "arguments": {"project_dir": "'"$EVD"'", "url": "https://target.example/"}}' > "$EVD/mcp.fifo"
+   sleep 10; tail -1 "$EVD/mcp-results.jsonl"
+   # ... 后续步骤同样逐条 echo 写入 ...
+   # 全部完成后关闭会话：
+   echo '{"tool": "close_browser", "arguments": {"project_dir": "'"$EVD"'"}}' > "$EVD/mcp.fifo"
+   echo '{"tool": "__shutdown__"}' > "$EVD/mcp.fifo"
+   ```
+
+   每写一条就 `tail -1 mcp-results.jsonl` 读真实返回（写 FIFO 会阻塞到 server 处理完，但耗时操作仍要 sleep 后再读结果）。
+
+   **形态二：一次性 batch（短链路）**。把一整组调用写进 calls.jsonl（每行一个 `{"tool": 工具名, "arguments": {...}}`，空行和 `#` 注释跳过）一次跑完；`launch_browser` 和后续浏览器操作必须在同一个文件里，出错默认继续（`--stop-on-error` 中止）：
+
+   ```jsonl
+   {"tool": "launch_browser", "arguments": {"project_dir": "/abs/evidence", "headless": true}}
+   {"tool": "navigate", "arguments": {"project_dir": "/abs/evidence", "url": "https://target.example/"}}
+   {"tool": "network_capture", "arguments": {"project_dir": "/abs/evidence", "action": "start"}}
+   {"tool": "close_browser", "arguments": {"project_dir": "/abs/evidence"}}
+   ```
+
+   输出每行一条 `{"tool":..., "ok":true/false, "result"|"error":...}`，顺序对应输入。`--timeout 180` 放大超时（launch/navigate/trace 都可能超过默认 30 秒）。**每条 tool 的 arguments 里都要显式带 `project_dir`**。
+
+**防编造铁律**：只有拿到工具的真实返回，才允许陈述任何事实。「把工具名和参数写进回复正文」不是调用。如果你发现自己正在用文字描述一个工具"应该"返回什么——停下来，回到上面三种方式之一真正调一次。证据目录里**必须**有这次调用产生的真实文件（`runs/<session-id>/` 下），空目录 = 没做过。
+
 ## 交付梯度（先选 1 个主模式，不提前升级）
 
 - **A 逻辑还原报告**：加密参数的生成链路（采集点 → 变换 → 落地字段）在产物中完整可追溯，附离线复现脚本。
@@ -70,8 +111,6 @@ description: 用 Camoufox Reverse 逆向浏览器做授权 Web 逆向取证与�
 | 离线验证签名实现 | `verify_signer_offline` | 验证结果 |
 
 Hook 语义优先级（高 → 低）：`request-use`（参数落请求处）→ `sign/decrypt-call` → `payload 明文边界` → `dispatch` → `reader/writer` → 低层 DOM/storage。**优先钩高语义层**；在 cookie setter、appendChild 这类低层 surface 之间切换不算真正换路线。
-
-命令行兜底（不依赖 MCP 宿主）：`bash ~/camoufox-reverse-browser/mcp/run-client.sh --project-dir <绝对路径> list-tools` / `call <tool> --arguments '<json>'`。
 
 ## 取证纪律
 

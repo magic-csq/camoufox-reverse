@@ -13,6 +13,13 @@ usage() {
     cat <<'EOF'
 Usage: mcp/run-client.sh --project-dir PATH [options] list-tools
        mcp/run-client.sh --project-dir PATH [options] call TOOL --arguments JSON
+       mcp/run-client.sh --project-dir PATH [options] [--timeout 120] batch CALLS.jsonl
+
+batch runs every line of CALLS.jsonl ({"tool": name, "arguments": {...}} per line,
+blank lines and '#' comments skipped, '-' reads stdin) inside ONE server session,
+so launch_browser and all follow-up browser operations stay alive across calls.
+Putting every call of one task in a single batch file is REQUIRED: a plain 'call'
+spawns a fresh server each time and the in-memory browser registry is lost.
 
 Options:
   --browser-project-dir PATH  Browser project containing scripts/run-reverse-mcp.sh
