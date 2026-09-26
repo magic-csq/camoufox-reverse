@@ -64,6 +64,8 @@ description: 用 Camoufox Reverse 逆向浏览器做授权 Web 逆向取证与�
 
    每写一条就 `tail -1 mcp-results.jsonl` 读真实返回（写 FIFO 会阻塞到 server 处理完，但耗时操作仍要 sleep 后再读结果）。
 
+   **进程清理纪律**：正常收尾就是 `close_browser` + `__shutdown__`，不需要杀进程。确实要清残留时**只能用包内 `scripts/mcp-cleanup.sh --project-dir <本任务目录>`**（带选择器的 scoped 清理）；**严禁广谱 `pkill`**（`pkill -f camoufox`、`pkill -x moz` 之类）——会误杀其它并行任务的 server、别的会话的浏览器、甚至本机 Firefox。机器上存在其它 camoufox 进程是正常的（其它会话/Codex 常驻 MCP），`ps | grep` 看到有进程不等于"没清干净"，不要反复清理。
+
    **形态二：一次性 batch（短链路）**。把一整组调用写进 calls.jsonl（每行一个 `{"tool": 工具名, "arguments": {...}}`，空行和 `#` 注释跳过）一次跑完；`launch_browser` 和后续浏览器操作必须在同一个文件里，出错默认继续（`--stop-on-error` 中止）：
 
    ```jsonl
