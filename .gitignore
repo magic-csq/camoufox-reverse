@@ -89,3 +89,4 @@ checks-bundle.js
 /dist-release-*/
 /dist-toolkit-*/
 /task-*-report.md
+*.egg-info/

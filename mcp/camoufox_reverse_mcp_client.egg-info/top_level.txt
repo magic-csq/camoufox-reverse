@@ -1,2 +1,0 @@
-camoufox_reverse_mcp_client
-tests
