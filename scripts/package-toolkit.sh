@@ -49,6 +49,17 @@ else
       camoufox-reverse-capabilities.json )
 fi
 ( cd "$PKG/browser" && shasum -a 256 "$ASSET" > SHA256SUMS )
+# 防止接收方 Agent 误以为 zip 是已装好的浏览器、或在本目录找 install.sh
+cat > "$PKG/browser/INSTALL.txt" <<EOF
+本目录的 zip 是【待安装资产】，不是已安装的浏览器。
+安装命令（在工具包根目录执行，详见根目录 README.md）：
+
+  python3 scripts/install-camoufox-reverse.py \\
+    browser/$ASSET \\
+    --sha256 "\$(awk '/$ASSET\$/ {print \$1}' browser/SHA256SUMS)"
+
+本目录没有 install.sh，请不要寻找或创建它。
+EOF
 
 echo "== 离线 addons（已提取的默认组件，存在才带）"
 if [[ -d "$ADDONS_SRC" ]]; then

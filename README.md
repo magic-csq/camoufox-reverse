@@ -201,7 +201,7 @@ python3 scripts/install_reverse_browser_agent.py \
 工具包是**自包含**的：浏览器二进制、离线附加组件、Skill、MCP 服务端全部打包在内，目标机器不需要 clone 仓库。本地打包用 `bash scripts/package-toolkit.sh`（产物在 `dist-toolkit-reverse.9/`，含目录和 tar.gz）；云端构建完成后同一内容也会挂在 GitHub Release。把下面这段消息发给目标机器上的 Agent 即可：
 
 ```text
-请帮我把 Camoufox Reverse 工具包复制到 ~/camoufox-reverse-browser，然后安装其中的 skill 和 MCP。任何一步失败就停下来报告，不要跳过：
+请帮我把 Camoufox Reverse 工具包复制到 ~/camoufox-reverse-browser，然后安装其中的 skill 和 MCP。任何一步失败就停下来报告，不要跳过；开始前先完整阅读包内 README.md 和 MCP.md，不要猜测或寻找本消息没有提到的文件。
 
 1. 获取工具包（二选一）：
    - 本地拷贝：我把 camoufox-reverse-browser-reverse.9.tar.gz 传给你；
@@ -211,17 +211,26 @@ python3 scripts/install_reverse_browser_agent.py \
    tar -xzf camoufox-reverse-browser-reverse.9.tar.gz -C ~/
    得到 ~/camoufox-reverse-browser/。
 
-2. 按包内 README.md 安装浏览器二进制（一条命令，SHA-256 与能力契约
-   强制校验，校验不过会拒绝安装；离线附加组件会一并装好）。
-   要求 Python ≥ 3.10。
+2. 安装浏览器二进制。browser/ 里的 zip 是待安装的资产，不是已装好的
+   浏览器——必须执行下面这条命令把它装进 camoufox 缓存
+   （没有 install.sh 这类脚本，不要去找；安装器是 scripts/ 下的 Python 脚本）：
+   cd ~/camoufox-reverse-browser && \
+   python3 scripts/install-camoufox-reverse.py \
+     browser/camoufox-152.0.4-beta.30-mac.arm64.zip \
+     --sha256 "$(awk '/camoufox-152.0.4-beta.30-mac.arm64.zip$/ {print $1}' browser/SHA256SUMS)"
+   安装器会强制 SHA-256 与能力契约校验，校验不过会拒绝安装并说明原因；
+   browser/addons/ 里的离线组件会自动一并安装。
+   要求 Python ≥ 3.10。注意：包内浏览器是 Apple Silicon Mac 版，其它
+   平台请先向我确认对应平台的资产。
 
 3. 安装 skill：包内 skill/camoufox-reverse-browser/ 目录（SKILL.md 在其中），
    按你 Agent 宿主的 skill 安装方式装入。
 
-4. 安装 MCP：包内 MCP.md 说明了服务名称（camoufox-reverse）、传输方式
-   （stdio）、启动命令、参数和完整工具清单。先按 MCP.md 做一次性的
-   pip 环境准备，然后按你宿主支持的方式自行注册这个 MCP——不提供也不
-   限定安装模板。
+4. 安装 MCP：先做一次性的 pip 环境准备（在工具包根目录执行）：
+   python3 -m pip install -e ./pythonlib -e ./integrations/camoufox-reverse-mcp -e ./mcp
+   然后按包内 MCP.md 的说明注册 MCP：服务名 camoufox-reverse，stdio
+   传输，启动命令、参数和完整工具清单都在 MCP.md 里。按你宿主支持的
+   方式自行注册——不提供也不限定安装模板。
 
 5. 验证：加载 MCP 后列出工具列表，应看到 launch_browser、
    trace_property_access、vm_loop_trace 等 36 个工具（完整清单在 MCP.md）。
