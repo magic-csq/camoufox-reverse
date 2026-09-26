@@ -234,7 +234,9 @@ python3 scripts/install_reverse_browser_agent.py \
    证据工程目录包含敏感数据，不要加入 Git，不要上传。
 ```
 
-设计要点：第 1 步只依赖 GitHub Release 的两个资产（自举包 + SHA256SUMS），自举包内目录布局与仓库一致，因此 skill 安装脚本和 MCP client 里基于 `__file__` 的相对路径推导在解压副本里照常成立；第 2 步的浏览器二进制由包内 `scripts/install-camoufox-reverse.py` 强制 SHA-256 与 reverse.9 能力契约双重校验（资产名不含 reverse 后缀，版本区分靠 release tag），下载不到或哈希不匹配会如实失败，不会偷偷装错版本；`install.sh` 保持幂等（已装浏览器跳过下载、`--force` 覆盖 skill 与配置示例），GitHub 下载尊重 `http_proxy`/`https_proxy` 环境变量而不硬编码代理；全程不接触宿主机全局配置（第 3 步只追加单条 MCP 条目）。
+设计要点：第 1 步只依赖 GitHub Release 的两个资产（自举包 + SHA256SUMS），自举包内目录布局与仓库一致，因此 skill 安装脚本和 MCP client 里基于 `__file__` 的相对路径推导在解压副本里照常成立；第 2 步的浏览器二进制由包内 `scripts/install-camoufox-reverse.py` 强制 SHA-256 与 reverse.9 能力契约双重校验（资产名不含 reverse 后缀，版本区分靠 release tag），下载不到或哈希不匹配会如实失败，不会偷偷装错版本；`install.sh` 保持幂等（已装浏览器跳过下载、`--force` 覆盖 skill 与配置示例），GitHub 下载尊重 `http_proxy`/`https_proxy` 环境变量而不硬编码代理；全程不接触宿主机全局配置（第 3 步只追加单条 MCP 条目），首次初始化官方缓存时会备份并在 fetch 后恢复用户原有 active 配置。
+
+**云端 release 未就绪时的本地分发**：在本仓库执行 `bash scripts/package-local-release.sh` 会用本机已安装的 reverse.9 浏览器缓存打出一个与云端 release 布局一致的本地目录（默认 `dist-release-v152.0.4-beta.30-reverse.9/`，含浏览器 zip、自举包、SHA256SUMS）。把这个目录整体拷给目标机器后，在自举包根目录用 `CAMOUFOX_REVERSE_RELEASE_BASE="file:///绝对路径/dist-release-v152.0.4-beta.30-reverse.9" bash install.sh` 即可完全离线安装，校验链路（SHA-256 + 能力契约）与云端路径完全相同。
 
 ## 产物使用手册
 
