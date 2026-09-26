@@ -206,9 +206,6 @@ class PropertyTracerExitTests(unittest.TestCase):
 
     def test_patched_immediate_exit_drains_before_terminating(self):
         self.assertTrue(SHUTDOWN_PATCH.is_file(), "Firefox immediate exit has no tracer shutdown hook")
-        patch = shutil.which("patch")
-        if not patch:
-            self.skipTest("patch command unavailable")
         fixture = self.root / "patch-fixture"
         source = fixture / "xpcom/base/AppShutdown.cpp"
         source.parent.mkdir(parents=True)
@@ -216,8 +213,18 @@ class PropertyTracerExitTests(unittest.TestCase):
         # 强制 LF）会因此失配（GHA windows smoke 实测 patch exit 3）。
         # 显式 newline="\n" 保持 LF。
         source.write_text(SHUTDOWN_FIXTURE, newline="\n")
-        subprocess.run([patch, "--batch", "--forward", "-p1", "-i", str(SHUTDOWN_PATCH)],
-                       cwd=fixture, check=True, capture_output=True, text=True)
+        patch = shutil.which("patch")
+        applied = False
+        if patch:
+            proc = subprocess.run([patch, "--batch", "--forward", "-p1", "-i", str(SHUTDOWN_PATCH)],
+                                  cwd=fixture, capture_output=True, text=True)
+            applied = proc.returncode == 0
+        if not applied:
+            # 兜底：Windows runner 的 Strawberry patch 2.5.9 对 LF 补丁仍 exit 3，
+            # 用纯 Python 应用同一个补丁（同样校验上下文），保持测试跨平台。
+            source.write_text(SHUTDOWN_FIXTURE, newline="\n")
+            patched_text = _apply_unified_diff(source.read_text(), SHUTDOWN_PATCH.read_text())
+            source.write_text(patched_text, newline="\n")
         patched = source.read_text()
         boundary = re.search(r"void AppShutdown::DoImmediateExit\(int aExitCode\) \{.*?\n\}",
                              patched, re.S).group()
@@ -232,6 +239,57 @@ struct AppShutdown { static void DoImmediateExit(int); };
         binary = compile_harness(self.root, EXIT_HARNESS.replace(
             "// EXIT_BOUNDARY", preamble + boundary), "patched_exit")
         self.assert_finalized(*self.run_exit("immediate", binary))
+
+def _apply_unified_diff(text: str, patch_text: str) -> str:
+    """Minimal unified-diff applier with hunk-offset search and context checks.
+
+    The system `patch` is preferred, but Windows runners ship Strawberry
+    patch 2.5.9 which rejects LF patches with exit 3; this fallback keeps the
+    shutdown-hook test platform-independent while still verifying that the
+    shipping patch's context matches the fixture.
+    """
+    lines = text.splitlines()
+    hunks = []
+    current = None
+    for patch_line in patch_text.splitlines():
+        header = re.match(r"@@ -(\d+)(?:,\d+)? \+\d+(?:,\d+)? @@", patch_line)
+        if header:
+            current = {"hint": int(header.group(1)) - 1, "ops": []}
+            hunks.append(current)
+        elif current is not None:
+            if patch_line.startswith(("+++", "---")):
+                continue
+            if patch_line.startswith("+"):
+                current["ops"].append(("+", patch_line[1:]))
+            elif patch_line.startswith("-"):
+                current["ops"].append(("-", patch_line[1:]))
+            elif patch_line.startswith(" "):
+                current["ops"].append((" ", patch_line[1:]))
+            elif not patch_line.startswith("\\"):
+                current = None
+    offset = 0
+    for hunk in hunks:
+        pattern = [content for op, content in hunk["ops"] if op != "+"]
+        start = next(
+            (i for i in range(len(lines) - len(pattern) + 1)
+             if lines[i:i + len(pattern)] == pattern),
+            None,
+        )
+        if start is None:
+            raise AssertionError(f"patch context not found near line {hunk['hint'] + 1}")
+        pos = start
+        for op, content in hunk["ops"]:
+            if op == "+":
+                lines.insert(pos, content)
+                pos += 1
+            elif op == "-":
+                del lines[pos]
+            else:
+                pos += 1
+        offset += sum(1 for op, _ in hunk["ops"] if op == "+") - \
+            sum(1 for op, _ in hunk["ops"] if op == "-")
+    return "\n".join(lines) + "\n"
+
 
 HARNESS = r"""
 #include "PropertyTracer.hpp"

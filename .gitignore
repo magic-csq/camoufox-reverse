@@ -86,4 +86,5 @@ checks-bundle.js
 /.mozbuild-reverse/
 /.web-reverse-tool-dir
 /dist-reverse.*/
+/dist-release-*/
 /task-*-report.md
