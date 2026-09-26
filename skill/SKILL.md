@@ -120,6 +120,16 @@ Hook 语义优先级（高 → 低）：`request-use`（参数落请求处）→
 - 分级标注：`observed`（直接捕获）/ `call-linked`（调用关系）/ `inferred`（注明推断依据）/ `gap`（缺失，如实登记）。
 - 所有 stdout/stderr 不出现密码、Cookie、token 或完整代理认证信息。
 
+## 页面操作纪律（click/type/wait 类，硬规则）
+
+页面交互是为采集服务的手段，不是进度本身。违反以下任意一条都算操作事故：
+
+- **每次调用先读返回再动下一步**。返回里有 `"error"` 就是失败——不允许无视错误继续点后面的步骤。
+- **输入字段必须验证回读**：`type_text` 返回带 `readback`/`verified` 字段，`verified != true` 时不允许点击 Next/提交，先排查（选择器是否命中、字段是否被清空、页面是否已跳转）。邮箱/密码/验证码这类关键字段，宁可再用 `evaluate_js` 读一次 `.value` 确认。
+- **防死循环**：对同一个 selector 的 `click`/`type_text`，如果连续 2 次后 `url_changed=false` 且 `take_snapshot` 内容无实质变化，**立刻停止重复调用**，转诊断（快照里有没有报错提示/验证码/加载中？元素是否真的可交互？）。重复点击不但无用，还会触发目标站风控（Google 登录页空提交多次会直接出图形验证码）。
+- **selector 语法**：`click`/`type_text` 的 `selector` 是 Playwright 选择器——CSS（`input[type="email"]`、`#identifierId`、`button:has-text("Next")`）或 role 语法（`role=textbox[name="Email or phone"]`）。`take_snapshot` 返回的 `role`/`name` 不是选择器，要用它们构造合法选择器。
+- **每步之间等跳转**：点击触发导航后用 `wait_for` 或 `get_page_info` 确认 URL/DOM 变了再继续，不在旧页面上操作新流程。
+
 ## 停损（每轮结束自问）
 
 - 连续 2 轮无新增 hook/入口/证据映射 → 换入口或换语义层；

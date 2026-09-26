@@ -364,22 +364,59 @@ async def take_snapshot() -> dict:
 
 @mcp.tool()
 async def click(selector: str) -> dict:
-    """Click on a page element."""
+    """Click on a page element.
+
+    Returns the page URL before/after the click so callers can immediately
+    tell whether the click changed anything; identical URLs plus an unchanged
+    snapshot mean "do NOT click the same selector again — diagnose first".
+    """
     try:
         page = await browser_manager.get_active_page()
+        url_before = page.url
         await page.click(selector)
-        return {"status": "clicked", "selector": selector}
+        await page.wait_for_timeout(500)
+        return {
+            "status": "clicked",
+            "selector": selector,
+            "url_before": url_before,
+            "url_after": page.url,
+            "url_changed": page.url != url_before,
+        }
     except Exception as e:
         return {"error": str(e)}
 
 
 @mcp.tool()
 async def type_text(selector: str, text: str, delay: int = 50) -> dict:
-    """Type text into an input field with realistic keystroke delays."""
+    """Type text into an input field with realistic keystroke delays.
+
+    Reads the field value back after typing so callers can verify the text
+    actually landed (for password fields the readback is masked to length only).
+    """
     try:
         page = await browser_manager.get_active_page()
         await page.type(selector, text, delay=delay)
-        return {"status": "typed", "selector": selector, "text": text}
+        element = await page.query_selector(selector)
+        readback: dict = {}
+        verified: bool | None = None
+        if element is not None:
+            input_type = (await element.get_attribute("type")) or ""
+            actual = await element.evaluate(
+                "el => el.value !== undefined ? el.value : el.textContent"
+            )
+            if input_type.lower() == "password":
+                readback = {"value_masked": True, "value_length": len(actual or "")}
+                verified = len(actual or "") == len(text)
+            else:
+                readback = {"value": actual}
+                verified = actual == text or (actual or "").endswith(text)
+        return {
+            "status": "typed",
+            "selector": selector,
+            "text": text,
+            "readback": readback,
+            "verified": verified,
+        }
     except Exception as e:
         return {"error": str(e)}
 
