@@ -212,7 +212,10 @@ class PropertyTracerExitTests(unittest.TestCase):
         fixture = self.root / "patch-fixture"
         source = fixture / "xpcom/base/AppShutdown.cpp"
         source.parent.mkdir(parents=True)
-        source.write_text(SHUTDOWN_FIXTURE)
+        # Windows 上 text 模式默认把 \n 翻成 \r\n，patch 上下文（.gitattributes
+        # 强制 LF）会因此失配（GHA windows smoke 实测 patch exit 3）。
+        # 显式 newline="\n" 保持 LF。
+        source.write_text(SHUTDOWN_FIXTURE, newline="\n")
         subprocess.run([patch, "--batch", "--forward", "-p1", "-i", str(SHUTDOWN_PATCH)],
                        cwd=fixture, check=True, capture_output=True, text=True)
         patched = source.read_text()
