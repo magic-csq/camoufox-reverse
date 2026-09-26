@@ -42,40 +42,30 @@ description: 用 Camoufox Reverse 逆向浏览器做授权 Web 逆向取证与�
 
 1. **直接工具**（Kimi、Codex 等）：工具列表里直接有 `launch_browser`、`navigate` 等 36 个工具 → 直接调用。
 2. **元工具**（Grok 等延迟加载宿主）：工具列表里只有 `search_tool` / `use_tool` → 先 `search_tool` 搜工具名（如 `search_tool("launch_browser")`），再用**带服务器前缀的全名**调用：`use_tool("camoufox-reverse__launch_browser", {...})`。前缀是 `camoufox-reverse__`（两个下划线）。不知道参数schema 时，`search_tool` 的结果里会带。
-3. **命令行兜底**（宿主不支持 MCP 或工具调用持续失败）：用 `bash ~/camoufox-reverse-browser/mcp/run-client.sh --project-dir <绝对路径> --timeout 180 batch <calls>` 执行。两种形态：
-
-   **形态一：FIFO 长会话（多步任务的首选，浏览器全程存活）**。每次 `call`/一次性 batch 结束后 server 进程退出、浏览器注册表（内存）即丢失；FIFO 模式让一个 server 进程常驻，跨多条终端命令复用同一个浏览器 session：
+3. **命令行兜底**（宿主不支持 MCP 或工具调用持续失败）：用包内自带的 `scripts/crb.py`，**一条命令 = 一次工具调用**，首次调用自动拉起常驻 server（浏览器跨命令存活），不用关心 FIFO/batch 细节：
 
    ```bash
-   EVD=/abs/evidence   # 证据目录（绝对路径）
-   mkfifo "$EVD/mcp.fifo"
-   bash ~/camoufox-reverse-browser/mcp/run-client.sh --project-dir "$EVD" --timeout 180 \
-     batch "$EVD/mcp.fifo" > "$EVD/mcp-results.jsonl" 2>&1 &
-   # 之后每一步都是一次独立的终端命令，浏览器状态全程保持：
-   echo '{"tool": "launch_browser", "arguments": {"project_dir": "'"$EVD"'", "headless": true}}' > "$EVD/mcp.fifo"
-   sleep 15; tail -1 "$EVD/mcp-results.jsonl"   # 读这一步的真实返回
-   echo '{"tool": "navigate", "arguments": {"project_dir": "'"$EVD"'", "url": "https://target.example/"}}' > "$EVD/mcp.fifo"
-   sleep 10; tail -1 "$EVD/mcp-results.jsonl"
-   # ... 后续步骤同样逐条 echo 写入 ...
-   # 全部完成后关闭会话：
-   echo '{"tool": "close_browser", "arguments": {"project_dir": "'"$EVD"'"}}' > "$EVD/mcp.fifo"
-   echo '{"tool": "__shutdown__"}' > "$EVD/mcp.fifo"
+   CRB="python3 ~/camoufox-reverse-browser/scripts/crb.py --project-dir /abs/evidence"
+   $CRB launch --headless            # 启动浏览器（同时自动拉起常驻 server）
+   $CRB navigate https://target.example/
+   $CRB snapshot                     # aria 快照（找可交互元素）
+   $CRB click 'button:has-text("Log In")'
+   $CRB type 'input[type="email"]' 'user@example.com'   # 返回带 readback/verified
+   $CRB eval 'document.title'
+   $CRB requests                     # 列出已捕获网络请求
+   $CRB call vm_loop_trace --arguments '{"duration_ms": 15000}'   # 任意 36 个工具
+   $CRB stop                         # 收尾：close_browser + 关闭 server
    ```
 
-   每写一条就 `tail -1 mcp-results.jsonl` 读真实返回（写 FIFO 会阻塞到 server 处理完，但耗时操作仍要 sleep 后再读结果）。
+   每条命令打印该工具的真实 JSON 返回；工具级错误（返回里有 `error`）退出码为 1。每条命令默认超时 180 秒（`--timeout` 可调），`project_dir` 会自动带上，无需手写。
 
-   **进程清理纪律**：正常收尾就是 `close_browser` + `__shutdown__`，不需要杀进程。确实要清残留时**只能用包内 `scripts/mcp-cleanup.sh --project-dir <本任务目录>`**（带选择器的 scoped 清理）；**严禁广谱 `pkill`**（`pkill -f camoufox`、`pkill -x moz` 之类）——会误杀其它并行任务的 server、别的会话的浏览器、甚至本机 Firefox。机器上存在其它 camoufox 进程是正常的（其它会话/Codex 常驻 MCP），`ps | grep` 看到有进程不等于"没清干净"，不要反复清理。
+   <details><summary>底层机制（排障时才需要看）</summary>
 
-   **形态二：一次性 batch（短链路）**。把一整组调用写进 calls.jsonl（每行一个 `{"tool": 工具名, "arguments": {...}}`，空行和 `#` 注释跳过）一次跑完；`launch_browser` 和后续浏览器操作必须在同一个文件里，出错默认继续（`--stop-on-error` 中止）：
+   crb.py 内部是 FIFO 长会话：状态文件在 `<project_dir>/.crb/`（mcp.fifo、results.jsonl、server.pid）。`call` 每次新起 server 会丢浏览器状态（`Browser is not running`），所以不要绕过 crb.py 直接反复调 `run-client.sh call`。原始 batch 模式仍可用：`bash mcp/run-client.sh --project-dir <dir> --timeout 180 batch calls.jsonl`（每行 `{"tool":..., "arguments":{...}}`），适合把一长串固定调用一次跑完。
 
-   ```jsonl
-   {"tool": "launch_browser", "arguments": {"project_dir": "/abs/evidence", "headless": true}}
-   {"tool": "navigate", "arguments": {"project_dir": "/abs/evidence", "url": "https://target.example/"}}
-   {"tool": "network_capture", "arguments": {"project_dir": "/abs/evidence", "action": "start"}}
-   {"tool": "close_browser", "arguments": {"project_dir": "/abs/evidence"}}
-   ```
+   </details>
 
-   输出每行一条 `{"tool":..., "ok":true/false, "result"|"error":...}`，顺序对应输入。`--timeout 180` 放大超时（launch/navigate/trace 都可能超过默认 30 秒）。**每条 tool 的 arguments 里都要显式带 `project_dir`**。
+   **进程清理纪律**：正常收尾就是 `$CRB stop`（内部 = `close_browser` + `__shutdown__`），不需要杀进程。确实要清残留时**只能用包内 `scripts/mcp-cleanup.sh --project-dir <本任务目录>`**（带选择器的 scoped 清理）；**严禁广谱 `pkill`**（`pkill -f camoufox`、`pkill -x moz` 之类）——会误杀其它并行任务的 server、别的会话的浏览器、甚至本机 Firefox。机器上存在其它 camoufox 进程是正常的（其它会话/Codex 常驻 MCP），`ps | grep` 看到有进程不等于"没清干净"，不要反复清理。
 
 **防编造铁律**：只有拿到工具的真实返回，才允许陈述任何事实。「把工具名和参数写进回复正文」不是调用。如果你发现自己正在用文字描述一个工具"应该"返回什么——停下来，回到上面三种方式之一真正调一次。证据目录里**必须**有这次调用产生的真实文件（`runs/<session-id>/` 下），空目录 = 没做过。
 

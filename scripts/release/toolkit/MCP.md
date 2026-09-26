@@ -85,24 +85,20 @@ bash mcp/run-client.sh --project-dir ~/camoufox-reverse-evidence list-tools
 
 看到上述工具清单即说明 MCP 链路正常。
 
-命令行兜底执行浏览器操作时，用 `batch` 模式（`call` 每次新起 server 进程，浏览器状态会丢失）。多步任务首选 **FIFO 长会话**——server 常驻、浏览器跨终端命令存活：
+命令行兜底执行浏览器操作时，**直接用包内 `scripts/crb.py`**（内置常驻会话管理，一条命令 = 一次工具调用，浏览器跨命令存活）：
 
 ```bash
-EVD=~/camoufox-reverse-evidence   # 展开为绝对路径
-mkfifo "$EVD/mcp.fifo"
-bash mcp/run-client.sh --project-dir "$EVD" --timeout 180 batch "$EVD/mcp.fifo" > "$EVD/mcp-results.jsonl" 2>&1 &
-echo '{"tool": "launch_browser", "arguments": {"project_dir": "<绝对路径>", "headless": true}}' > "$EVD/mcp.fifo"
-sleep 15; tail -1 "$EVD/mcp-results.jsonl"
-# ... 之后每步 echo 一行到 mcp.fifo，结束后：
-echo '{"tool": "__shutdown__"}' > "$EVD/mcp.fifo"
+CRB="python3 ~/camoufox-reverse-browser/scripts/crb.py --project-dir ~/camoufox-reverse-evidence"
+$CRB launch --headless
+$CRB navigate https://example.com/
+$CRB snapshot
+$CRB click 'button:has-text("Next")'
+$CRB call vm_loop_trace --arguments '{"duration_ms": 15000}'   # 任意工具
+$CRB stop
 ```
 
-短链路也可用一次性 batch：把每行 `{"tool": 名, "arguments": {...}}` 写进 calls.jsonl
-（`launch_browser` 和后续操作必须在同一文件内），然后：
-
-```bash
-bash mcp/run-client.sh --project-dir /abs/evidence --timeout 120 batch calls.jsonl
-```浏览器本体是否就绪，用
+不要用 `run-client.sh call` 反复单条调用——每次新起 server 进程，浏览器状态会丢失。
+浏览器本体是否就绪，用
 `check_environment` 工具确认（它会检查 selector
 `whitenightshadow/152.0.4-beta.30-reverse.9` 的安装状态与能力契约）。
 

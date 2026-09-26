@@ -78,8 +78,9 @@ cp -R pythonlib "$PKG/pythonlib"
 cp -R mcp "$PKG/mcp"
 cp -R integrations/camoufox-reverse-mcp "$PKG/integrations/camoufox-reverse-mcp"
 cp scripts/install-camoufox-reverse.py scripts/run-reverse-mcp.sh \
-   scripts/reverse-browser-instrumentation-divergence.py scripts/mcp-cleanup.sh "$PKG/scripts/"
-chmod +x "$PKG/scripts/run-reverse-mcp.sh" "$PKG/scripts/mcp-cleanup.sh"
+   scripts/reverse-browser-instrumentation-divergence.py scripts/mcp-cleanup.sh \
+   scripts/crb.py "$PKG/scripts/"
+chmod +x "$PKG/scripts/run-reverse-mcp.sh" "$PKG/scripts/mcp-cleanup.sh" "$PKG/scripts/crb.py"
 cp scripts/release/toolkit/README.md "$PKG/README.md"
 cp scripts/release/toolkit/MCP.md "$PKG/MCP.md"
 
