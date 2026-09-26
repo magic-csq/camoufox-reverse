@@ -73,7 +73,7 @@ fi
 
 echo "== Skill / MCP / 文档"
 mkdir -p "$PKG/skill/camoufox-reverse-browser"
-cp skill/SKILL.md "$PKG/skill/camoufox-reverse-browser/SKILL.md"
+cp -R skill/ "$PKG/skill/camoufox-reverse-browser/"
 cp -R pythonlib "$PKG/pythonlib"
 cp -R mcp "$PKG/mcp"
 cp -R integrations/camoufox-reverse-mcp "$PKG/integrations/camoufox-reverse-mcp"
