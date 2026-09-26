@@ -17,6 +17,7 @@
 | `mcp/` | MCP 命令行客户端（自检/调试使用） |
 | `scripts/install-camoufox-reverse.py` | 浏览器安装器（SHA-256 + 能力契约双重校验） |
 | `scripts/run-reverse-mcp.sh` | MCP 服务端启动脚本 |
+| `scripts/reverse-browser-instrumentation-divergence.py` | 被动/插桩双会话分叉裁决（未知目标先跑它） |
 
 ## 安装步骤
 
