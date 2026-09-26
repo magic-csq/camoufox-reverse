@@ -5,9 +5,8 @@
 #   1. 检查 python3 >= 3.10
 #   2. pip 安装 pythonlib / integrations/camoufox-reverse-mcp / mcp（可重复执行）
 #   3. 从 GitHub Release 下载并校验安装浏览器二进制（sha256 强制校验；
-#      首次使用时先用官方 camoufox fetch 初始化 0.5 缓存——fetch 会把官方版本
-#      设为 active，本脚本在 fetch 前备份配置、fetch 后立即恢复，不改变用户原有
-#      active；若本来就没有配置，则保留官方版本作为 active 保底浏览器）
+#      安装器在空缓存下自建 0.5 布局标记，全程不联网 fetch 官方浏览器、
+#      不触碰用户的 active 配置；压缩包同级若有 addons/ 目录则一并离线安装）
 #   4. 安装 Skill 并生成 MCP 配置示例（install_reverse_browser_agent.py --apply）
 #   5. browser-free 自检：list-tools 能返回工具清单
 #
@@ -66,31 +65,6 @@ else
   if [ -d "$DEST" ]; then
     echo "浏览器已安装于 $DEST，跳过下载（幂等）"
   else
-    if [ ! -f "$CACHE_DIR/.0.5_FLAG" ]; then
-      echo "首次使用：先安装一个官方 Camoufox 以初始化 0.5 缓存（作为 active 保底浏览器）"
-      # camoufox fetch 只认 platformdirs 的真实用户缓存（无环境变量覆盖），
-      # 且会把官方版本写为 active——先备份真实缓存的 config.json，fetch 后恢复，
-      # 保证不改变用户原有的 active 配置。
-      REAL_CACHE="$("$PY" -c 'from camoufox.pkgman import INSTALL_DIR; print(INSTALL_DIR)')"
-      CONFIG_BACKUP=""
-      if [ -f "$REAL_CACHE/config.json" ]; then
-        CONFIG_BACKUP="$(mktemp "${TMPDIR:-/tmp}/camoufox-reverse-config.XXXXXX")"
-        cp "$REAL_CACHE/config.json" "$CONFIG_BACKUP"
-      fi
-      "$PY" -m camoufox fetch \
-        || fail "官方 Camoufox fetch 失败（需要访问 GitHub；可配置 http_proxy/https_proxy 后重跑）"
-      if [ -n "$CONFIG_BACKUP" ]; then
-        cp "$CONFIG_BACKUP" "$REAL_CACHE/config.json"
-        rm -f "$CONFIG_BACKUP"
-        echo "已恢复原有 active 配置（官方版本仅作缓存初始化，不抢占 active）"
-      fi
-      # 测试模式（CAMOUFOX_REVERSE_CACHE_DIR）下真实缓存已初始化、
-      # 隔离缓存还没有 .0.5_FLAG——安装器只检查这个标记文件，同步过来即可。
-      if [ "$REAL_CACHE" != "$CACHE_DIR" ] && [ -f "$REAL_CACHE/.0.5_FLAG" ]; then
-        mkdir -p "$CACHE_DIR"
-        cp "$REAL_CACHE/.0.5_FLAG" "$CACHE_DIR/.0.5_FLAG"
-      fi
-    fi
     WORK="$(mktemp -d "${TMPDIR:-/tmp}/camoufox-reverse-install.XXXXXX")"
     trap 'rm -rf "$WORK"' EXIT
     SUMS_URL="$("$PY" "$ROOT/scripts/release_bootstrap.py" --base "$RELEASE_BASE" sums-url)"

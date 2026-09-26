@@ -87,4 +87,5 @@ checks-bundle.js
 /.web-reverse-tool-dir
 /dist-reverse.*/
 /dist-release-*/
+/dist-toolkit-*/
 /task-*-report.md

@@ -170,6 +170,61 @@ class InstallerTests(unittest.TestCase):
                 archive, cache_dir=cache, expected_sha256=_digest(archive)
             )
 
+    def test_empty_cache_initializes_compat_flag_without_official_browser(self):
+        # 全新机器：缓存目录都不存在时，安装器自建 0.5 标记，
+        # 不要求先联网 fetch 一个官方浏览器。
+        cache = self.root / "cache"
+        archive = _archive(
+            self.root / "camoufox-152.0.4-beta.30-lin.x86_64.zip"
+        )
+        result = installer.install_archive(
+            archive, cache_dir=cache, expected_sha256=_digest(archive)
+        )
+
+        self.assertEqual(result["status"], "installed")
+        self.assertTrue((cache / ".0.5_FLAG").is_file())
+        self.assertEqual(result["addons_installed"], [])
+
+    def test_bundled_addons_are_installed_and_never_overwritten(self):
+        cache = self.root / "cache"
+        cache.mkdir()
+        (cache / ".0.5_FLAG").touch()
+        bundled = self.root / "addons" / "UBO"
+        bundled.mkdir(parents=True)
+        (bundled / "manifest.json").write_text('{"name": "uBO"}')
+        (bundled / "payload.js").write_text("// addon payload")
+        archive = _archive(
+            self.root / "camoufox-152.0.4-beta.30-lin.x86_64.zip"
+        )
+        result = installer.install_archive(
+            archive, cache_dir=cache, expected_sha256=_digest(archive)
+        )
+
+        self.assertEqual(result["addons_installed"], ["UBO"])
+        installed = cache / "addons" / "UBO"
+        self.assertEqual((installed / "manifest.json").read_text(), '{"name": "uBO"}')
+        self.assertTrue((installed / "payload.js").is_file())
+
+        # 已有同名组件（哪怕内容不同）时绝不覆盖
+        marker = self.root / "cache2"
+        marker.mkdir()
+        (marker / ".0.5_FLAG").touch()
+        existing = marker / "addons" / "UBO"
+        existing.mkdir(parents=True)
+        (existing / "manifest.json").write_text('{"name": "user-customized"}')
+        # archive2 同级没有 addons/ 目录时不做任何组件动作
+        (self.root / "nested").mkdir()
+        archive2 = _archive(
+            self.root / "nested" / "camoufox-152.0.4-beta.30-lin.x86_64.zip"
+        )
+        result2 = installer.install_archive(
+            archive2, cache_dir=marker, expected_sha256=_digest(archive2)
+        )
+        self.assertEqual(result2["addons_installed"], [])
+        self.assertEqual(
+            (existing / "manifest.json").read_text(), '{"name": "user-customized"}'
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

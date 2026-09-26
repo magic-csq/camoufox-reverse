@@ -158,10 +158,11 @@ def install_archive(
             "0.5 migration/backup flow first. No files were changed."
         )
     if not compat_flag.exists():
-        raise InstallError(
-            "Camoufox 0.5 cache is not initialized. Install/fetch one official "
-            "browser first so an active same-major browser remains available."
-        )
+        # 空缓存/首次使用：本安装器写入的就是 0.5 布局（browsers/<repo>/<ver>/），
+        # 直接建立标记即可。逆向浏览器通过显式 selector 启动，不要求先联网
+        # fetch 一个官方浏览器作为 active 保底。
+        cache.mkdir(parents=True, exist_ok=True)
+        compat_flag.touch()
 
     with zipfile.ZipFile(archive_path) as archive:
         members = _safe_members(archive)
@@ -252,6 +253,23 @@ def install_archive(
             raise
 
     selector = f"whitenightshadow/{folder}"
+    # 随包附加组件（可选）：压缩包同级的 addons/<Name>/ 目录（含 manifest.json）
+    # 复制到缓存的 addons/ 下，已存在则跳过（幂等，从不覆盖用户已有组件）。
+    # 用于离线/受限网络环境——首次启动时 pythonlib 会自动联网下载缺失的默认
+    # 组件（如 uBO），但 addons.mozilla.org 在部分网络下返回 451。
+    addons_installed: list[str] = []
+    bundled_addons = Path(archive_path).resolve().parent / "addons"
+    if bundled_addons.is_dir():
+        addons_root = cache / "addons"
+        for addon_dir in sorted(bundled_addons.iterdir()):
+            if not addon_dir.is_dir() or not (addon_dir / "manifest.json").is_file():
+                continue
+            target = addons_root / addon_dir.name
+            if target.exists():
+                continue
+            addons_root.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(addon_dir, target)
+            addons_installed.append(addon_dir.name)
     return {
         "status": "installed",
         "path": str(destination),
@@ -260,6 +278,7 @@ def install_archive(
         "build": build,
         "sha256": digest,
         "active_config_changed": False,
+        "addons_installed": addons_installed,
     }
 
 

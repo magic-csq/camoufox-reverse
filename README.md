@@ -196,47 +196,45 @@ python3 scripts/install_reverse_browser_agent.py \
 
 配置示例只包含命令、工程目录和代理地址，不包含密码、Cookie 或 token。脚本不会自动启动浏览器，不会访问网络，也不会覆盖已有配置，除非显式使用 `--force`。
 
-### 发给 Agent 的自动安装消息（零仓库自举版）
+### 发给 Agent 的自动安装消息
 
-下面这段消息可以发给**任何一台机器上**支持本地命令执行的 Agent——不要求它本地已经有本仓库。浏览器二进制、Python 包、Skill 和 MCP 配置全部从 GitHub Release 的 `reverse.9` 资产获取，每一步都幂等且可验证：
+工具包是**自包含**的：浏览器二进制、离线附加组件、Skill、MCP 服务端全部打包在内，目标机器不需要 clone 仓库。本地打包用 `bash scripts/package-toolkit.sh`（产物在 `dist-toolkit-reverse.9/`，含目录和 tar.gz）；云端构建完成后同一内容也会挂在 GitHub Release。把下面这段消息发给目标机器上的 Agent 即可：
 
 ```text
-请在这台机器上安装 Camoufox Reverse 逆向分析浏览器（release 直装，不需要 clone 任何仓库）。严格按顺序执行，任何一步失败就停下来报告，不要跳过：
+请帮我把 Camoufox Reverse 工具包复制到 ~/camoufox-reverse-browser，然后安装其中的 skill 和 MCP。任何一步失败就停下来报告，不要跳过：
 
-1. 下载自举包并校验 SHA-256（reverse.9）：
-   curl -fLO https://github.com/magic-csq/camoufox-reverse/releases/download/v152.0.4-beta.30-reverse.9/camoufox-reverse-agent-reverse.9.tar.gz
-   curl -fLO https://github.com/magic-csq/camoufox-reverse/releases/download/v152.0.4-beta.30-reverse.9/SHA256SUMS
-   从 SHA256SUMS 取出 camoufox-reverse-agent-reverse.9.tar.gz 的期望哈希，用
-   shasum -a 256（或 sha256sum）核对，不一致立即终止并报告。
-   需要代理时设置 https_proxy 环境变量，不要把代理地址硬编码进脚本或配置。
-   校验通过后解压：mkdir -p ~/camoufox-reverse-agent &&
-   tar -xzf camoufox-reverse-agent-reverse.9.tar.gz -C ~/camoufox-reverse-agent
+1. 获取工具包（二选一）：
+   - 本地拷贝：我把 camoufox-reverse-browser-reverse.9.tar.gz 传给你；
+   - 或下载：https://github.com/magic-csq/camoufox-reverse/releases/download/v152.0.4-beta.30-reverse.9/camoufox-reverse-browser-reverse.9.tar.gz
+     （需要代理时设置 https_proxy 环境变量，不要硬编码代理地址）
+   解压并把目录放到位的命令：
+   tar -xzf camoufox-reverse-browser-reverse.9.tar.gz -C ~/
+   得到 ~/camoufox-reverse-browser/。
 
-2. 运行自举安装（要求 Python ≥ 3.10；脚本幂等，失败修复后重跑即可）：
-   cd ~/camoufox-reverse-agent && bash install.sh
-   它会依次完成：pip 安装 pythonlib / integrations/camoufox-reverse-mcp / mcp
-   三个包（只装这三个，不要安装 Node、Selenium 或其它自动化框架）→
-   按当前平台从同一 release 下载浏览器二进制并强制 SHA-256 校验安装
-   （selector 固定 whitenightshadow/152.0.4-beta.30-reverse.9；首次使用会先
-   装一个官方 Camoufox 初始化 0.5 缓存作为 active 保底，不会改装其它版本）→
-   安装 Skill → 在工程目录生成 mcp-config.json 示例 → list-tools
-   browser-free 自检。工程目录默认 ~/camoufox-reverse-evidence，
-   可用 bash install.sh /绝对路径/工程目录 指定。
+2. 按包内 README.md 安装浏览器二进制（一条命令，SHA-256 与能力契约
+   强制校验，校验不过会拒绝安装；离线附加组件会一并装好）。
+   要求 Python ≥ 3.10。
 
-3. 把第 2 步生成的 mcp-config.json 里的 camoufox-reverse 条目追加进你的
-   MCP 配置（只追加，不覆盖已有条目；如宿主不支持 MCP，说明情况即可）。
+3. 安装 skill：包内 skill/camoufox-reverse-browser/ 目录（SKILL.md 在其中），
+   按你 Agent 宿主的 skill 安装方式装入。
 
-4. 只做 browser-free 校验，然后报告：
-   - 第 2 步末尾的 list-tools 自检已返回工具清单；
-   - 输出中没有密码、Cookie、token；
-   - 报告实际修改/新建的文件路径和每条校验命令的结果。
-   不要启动浏览器访问第三方网站，不要登录、不要处理验证码、不要触发风控。
-   证据工程目录包含敏感数据，不要加入 Git，不要上传。
+4. 安装 MCP：包内 MCP.md 说明了服务名称（camoufox-reverse）、传输方式
+   （stdio）、启动命令、参数和完整工具清单。先按 MCP.md 做一次性的
+   pip 环境准备，然后按你宿主支持的方式自行注册这个 MCP——不提供也不
+   限定安装模板。
+
+5. 验证：加载 MCP 后列出工具列表，应看到 launch_browser、
+   trace_property_access、vm_loop_trace 等 36 个工具（完整清单在 MCP.md）。
+   也可以命令行自检：
+   bash ~/camoufox-reverse-browser/mcp/run-client.sh \
+     --project-dir ~/camoufox-reverse-evidence list-tools
+
+约束：除非我明确要求，不要启动浏览器访问第三方网站，不要登录、不要
+处理验证码、不要触发风控。证据工程目录（默认 ~/camoufox-reverse-evidence）
+包含敏感数据，不要加入 Git，不要上传。
 ```
 
-设计要点：第 1 步只依赖 GitHub Release 的两个资产（自举包 + SHA256SUMS），自举包内目录布局与仓库一致，因此 skill 安装脚本和 MCP client 里基于 `__file__` 的相对路径推导在解压副本里照常成立；第 2 步的浏览器二进制由包内 `scripts/install-camoufox-reverse.py` 强制 SHA-256 与 reverse.9 能力契约双重校验（资产名不含 reverse 后缀，版本区分靠 release tag），下载不到或哈希不匹配会如实失败，不会偷偷装错版本；`install.sh` 保持幂等（已装浏览器跳过下载、`--force` 覆盖 skill 与配置示例），GitHub 下载尊重 `http_proxy`/`https_proxy` 环境变量而不硬编码代理；全程不接触宿主机全局配置（第 3 步只追加单条 MCP 条目），首次初始化官方缓存时会备份并在 fetch 后恢复用户原有 active 配置。
-
-**云端 release 未就绪时的本地分发**：在本仓库执行 `bash scripts/package-local-release.sh` 会用本机已安装的 reverse.9 浏览器缓存打出一个与云端 release 布局一致的本地目录（默认 `dist-release-v152.0.4-beta.30-reverse.9/`，含浏览器 zip、自举包、SHA256SUMS）。把这个目录整体拷给目标机器后，在自举包根目录用 `CAMOUFOX_REVERSE_RELEASE_BASE="file:///绝对路径/dist-release-v152.0.4-beta.30-reverse.9" bash install.sh` 即可完全离线安装，校验链路（SHA-256 + 能力契约）与云端路径完全相同。
+设计要点：工具包内目录布局与仓库一致，因此 `scripts/run-reverse-mcp.sh`、`mcp/run-client.sh` 里基于脚本位置的相对路径推导在拷贝副本里照常成立；浏览器二进制由 `scripts/install-camoufox-reverse.py` 强制 SHA-256 与 reverse.9 能力契约双重校验，以 selector `whitenightshadow/152.0.4-beta.30-reverse.9` 旁路安装，空缓存下自建 0.5 布局标记——全程不需要联网 fetch 官方浏览器，也绝不触碰机器上已有 Camoufox 的 active 配置；zip 同级的 `browser/addons/`（uBO 离线副本）会自动安装，规避 addons.mozilla.org 在部分网络下的 451 封锁；MCP 只提供说明文档（名称/启动命令/参数/工具清单），注册方式由接收方 Agent 按宿主能力自行决定。
 
 ## 产物使用手册
 
