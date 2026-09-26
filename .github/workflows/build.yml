@@ -279,7 +279,9 @@ jobs:
           find "$stage" \( -name '__pycache__' -o -name '*.egg-info' -o -name '.pytest_cache' \) -type d -prune -exec rm -rf {} +
           tar -czf "$bundle" -C "$stage" install.sh pythonlib mcp integrations skill scripts
           test -s "$bundle"
-          tar -tzf "$bundle" | grep -qx 'install.sh'
+          # No grep -q: early exit closes the pipe and GNU tar dies with
+          # "stdout: write error" (exit 2) under bash -o pipefail.
+          tar -tzf "$bundle" | grep -x 'install.sh' >/dev/null
           sha256sum "$bundle" >> SHA256SUMS
 
       - name: Validate Chinese release notes
