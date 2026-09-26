@@ -16,15 +16,26 @@
 #  include <process.h>
 #  include <direct.h>
 typedef int pid_t;
-#  define close  _close
-#  define write  _write
-#  define fsync  _commit
-#  define getpid _getpid
+// 不能用 #define close _close 这类宏做 POSIX 桥接——宏会污染本文件内
+// ofstream::close() 等 STL 成员调用（MSVC STL 里没有 _close 成员，
+// 2026-09-26 GHA windows 首跑实测编译失败）。用内联包装函数替代。
+static inline int posix_close(int fd) { return _close(fd); }
+static inline int posix_write(int fd, const void* buf, size_t size) {
+  return _write(fd, buf, static_cast<unsigned int>(size));
+}
+static inline int posix_fsync(int fd) { return _commit(fd); }
+static inline pid_t posix_getpid() { return _getpid(); }
 #else
 #  include <unistd.h>
 #  ifndef O_BINARY
 #    define O_BINARY 0
 #  endif
+static inline int posix_close(int fd) { return close(fd); }
+static inline ssize_t posix_write(int fd, const void* buf, size_t size) {
+  return write(fd, buf, size);
+}
+static inline int posix_fsync(int fd) { return fsync(fd); }
+static inline pid_t posix_getpid() { return getpid(); }
 #endif
 
 namespace camou {
@@ -103,9 +114,9 @@ bool WriteAll(int fd, const char* data, size_t size) {
 #ifdef _WIN32
     const unsigned int chunk = static_cast<unsigned int>(
         std::min<size_t>(size, static_cast<size_t>(INT_MAX)));
-    const int written = write(fd, data, chunk);
+    const int written = posix_write(fd, data, chunk);
 #else
-    const ssize_t written = write(fd, data, size);
+    const ssize_t written = posix_write(fd, data, size);
 #endif
     if (written < 0 && errno == EINTR) continue;
     if (written <= 0) return false;
@@ -153,7 +164,7 @@ void PropertyTracer::Initialize(const std::string& baseDir,
   MkdirP(controlDir.c_str());
   MkdirP(mLogDir.c_str());
 
-  pid_t pid = getpid();
+  pid_t pid = posix_getpid();
   char ctrlPath[1024];
   snprintf(ctrlPath, sizeof(ctrlPath), "%s/control-%d.cmd",
            controlDir.c_str(), pid);
@@ -416,7 +427,7 @@ void PropertyTracer::StartNewSession() {
   if (mCurrentFd >= 0) return;  // already open
 
   // Use parent PID for content processes (they share the same trace dir)
-  pid_t pid = getpid();
+  pid_t pid = posix_getpid();
   char path[1024];
   snprintf(path, sizeof(path), "%s/%d_%u.jsonl",
            mLogDir.c_str(), pid, mSessionId++);
@@ -463,12 +474,12 @@ void PropertyTracer::StopSession() {
 
   std::lock_guard<std::mutex> lock(mSessionMutex);
   if (mCurrentFd >= 0) {
-    if (fsync(mCurrentFd) != 0) {
+    if (posix_fsync(mCurrentFd) != 0) {
       mWriteFailed.store(true, std::memory_order_release);
       fprintf(stderr, "PropertyTracer: failed to sync trace file: %s\n",
               strerror(errno));
     }
-    if (close(mCurrentFd) != 0) {
+    if (posix_close(mCurrentFd) != 0) {
       mWriteFailed.store(true, std::memory_order_release);
     }
     mCurrentFd = -1;
